@@ -985,7 +985,10 @@ function stepWeather(dt) {
   renderer.toneMappingExposure = wx.expo;
 }
 document.querySelectorAll('#wx button').forEach(b => b.addEventListener('click', () => setWeather(b.dataset.w)));
-addEventListener('keydown', e => { const n = ['golden', 'overcast', 'rain', 'mist', 'starry'][+e.key - 1]; if (n) setWeather(n); });
+// Starry is still being worked on: it only appears on the local copy, not the hosted site.
+const LAB = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';
+if (!LAB) document.querySelector('#wx [data-w="starry"]')?.remove();
+addEventListener('keydown', e => { const n = ['golden', 'overcast', 'rain', 'mist', LAB && 'starry'][+e.key - 1]; if (n) setWeather(n); });
 
 /* ---------- cockpit ---------- */
 const rig = new THREE.Group();
@@ -1143,7 +1146,7 @@ $('bt').addEventListener('click', async () => {
     [/\b(mist|misty|fog|foggy)\b/, 'Mist', () => setWeather('mist')],
     [/\b(overcast|cloud|clouds|cloudy|grey|gray)\b/, 'Overcast', () => setWeather('overcast')],
     [/\b(golden|sun|sunny|sunshine|sunset|clear|evening)\b/, 'Golden', () => setWeather('golden')],
-    [/\b(starry|stars|night|painting|van gogh)\b/, 'Starry', () => setWeather('starry')],
+    ...(LAB ? [[/\b(starry|stars|night|painting|van gogh)\b/, 'Starry', () => setWeather('starry')]] : []),
     [/\b(skip|forward|ahead)\b/, 'Skip ahead', () => skip(250)],
     [/\bback\b/, 'Skip back', () => skip(-250)]];
   let rec = null, on = false, last = 0;
