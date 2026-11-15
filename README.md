@@ -9,7 +9,7 @@ Live: https://golden-hour-ride.space.fast/ · Leckhampton loop: https://golden-h
 - Two courses: an invented mountain valley, and a real 11.9 km Leckhampton loop built from Environment Agency lidar, dressed as the 19th-century hill (sheep, hay stooks, quarry smoke).
 - Four looks: Golden, Overcast, Rain and Mist. Buttons at the top, keys 1–4, or by voice.
 - Skip forward and back 250 m with the arrow keys.
-- Power from a slider, or from a Bluetooth trainer (Chrome or Edge).
+- Power from a slider, or from a Bluetooth trainer (Chrome or Edge). If the trainer supports resistance control (FTMS), the ride also sends it the road gradient, so climbs feel harder; the button shows "Trainer: power and gradient" or "Trainer: power only".
 
 ## Run it locally
 
