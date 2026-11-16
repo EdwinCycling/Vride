@@ -1126,7 +1126,8 @@ addEventListener('resize', () => {
 });
 
 /* ---------- input: keys, slider, smart trainer ---------- */
-const st = { s: 0, v: 6, power: 220, target: 220, dist: 0, trainer: false };
+const START = real ? 850 : 0;          // Leckhampton: begin on the lane about 150 m below where the hill steepens, not out in the vale
+const st = { s: START, v: 6, power: 220, target: 220, dist: 0, trainer: false };
 window.ride = st; st.haze = hazeCol; st.built = st0;
 st.goNear = (x, z) => { let b = 0, bd = 1e12; for (let i = 0; i < N; i++) { const d = (P[i].x - x) ** 2 + (P[i].z - z) ** 2; if (d < bd) { bd = d; b = i; } } st.s = Math.max(0, b * LEN / N - 60); return Math.round(Math.sqrt(bd)); };   // for checking: ride to the road nearest a point
 st.weather = (n, i) => setWeather(n, i);
