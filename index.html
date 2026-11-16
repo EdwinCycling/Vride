@@ -34,6 +34,8 @@
   #log td:last-child { text-align: right; }
   #log .muted { opacity: .65; }
   #log button { margin-top: 12px; font: inherit; font-size: 11px; color: #fff; background: none; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+  body.clean #hud, body.clean #ctl, body.clean #log, body.clean #credit { display: none; }
+  body.clean { cursor: none; }
   #credit { position: fixed; right: 14px; bottom: 10px; font-size: 10px; letter-spacing: .04em; opacity: .7; text-shadow: 0 1px 6px rgba(0,0,0,.7); max-width: 46vw; text-align: right; }
 </style>
 <script type="importmap">
@@ -56,10 +58,11 @@
   <input id="pwr" type="range" min="0" max="600" step="5" value="220" aria-label="Power in watts">
   <span>↑ ↓ keys</span>
   <button id="skip" title="Jump 250 m up the road (→ key; ← goes back)">Skip 250 m ›</button>
-  <button id="voice" title="Say: rain, mist, overcast, sunny, skip or back">Voice: off</button>
+  <button id="voice" title="Say: rain, mist, overcast, sunny, skip, back, hide or show">Voice: off</button>
   <button id="course" title="Switch between the invented valley and the real Leckhampton Hill loop">Course</button>
   <span id="wx"><button data-w="golden" class="on">Golden</button><button data-w="overcast">Overcast</button><button data-w="rain">Rain</button><button data-w="mist">Mist</button><button data-w="starry">Starry</button></span>
   <button id="bt">Connect trainer</button>
+  <button id="clean" title="Hide everything on screen (H key, or say “hide”). Press H, click, or say “show” to bring it back">Hide info</button>
   <button id="logbtn" title="Distance you have ridden, kept in this browser">Log</button>
 </div>
 <div id="log" hidden></div>
@@ -1136,6 +1139,13 @@ addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') skip(-250);
 });
 $('pwr').addEventListener('input', e => { st.target = +e.target.value; });
+
+// hide everything on screen, leaving only the ride: the button, the H key, or by voice. H, a click, or "show" brings it back.
+const setClean = hide => document.body.classList.toggle('clean', hide);
+const isClean = () => document.body.classList.contains('clean');
+$('clean').addEventListener('click', e => { e.stopPropagation(); setClean(true); });
+addEventListener('click', () => { if (isClean()) setClean(false); });
+addEventListener('keydown', e => { if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !e.altKey) setClean(!isClean()); });
 $('skip').addEventListener('click', () => skip(250));
 /* Smart trainer. Power is read from the Cycling Power service. If the trainer also has the Fitness Machine
    Service (FTMS), the game takes control of it and sends the road gradient, so climbs feel harder on the bike.
@@ -1257,7 +1267,9 @@ $('bt').addEventListener('click', async () => {
     [/\b(golden|sun|sunny|sunshine|sunset|clear|evening)\b/, 'Golden', () => setWeather('golden')],
     ...(LAB ? [[/\b(starry|stars|night|painting|van gogh)\b/, 'Starry', () => setWeather('starry')]] : []),
     [/\b(skip|forward|ahead)\b/, 'Skip ahead', () => skip(250)],
-    [/\bback\b/, 'Skip back', () => skip(-250)]];
+    [/\bback\b/, 'Skip back', () => skip(-250)],
+    [/\b(hide|hidden)\b/, 'Info hidden', () => setClean(true)],
+    [/\b(show|info|display)\b/, 'Info shown', () => setClean(false)]];
   let rec = null, on = false, last = 0;
   const label = t => { btn.textContent = t; btn.classList.toggle('on', on); };
   if (!SR) { btn.title = 'Voice control needs Chrome or Edge'; btn.addEventListener('click', () => label('Voice: needs Chrome')); }
