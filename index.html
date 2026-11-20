@@ -23,6 +23,9 @@
   #ctl button:hover { background: rgba(20,16,12,.7); }
   #ctl button.on { background: rgba(255,255,255,.3); border-color: #fff; }
   #wx { display: flex; gap: 4px; }
+  #hills { display: flex; gap: 4px; align-items: center; }
+  #hills button { min-width: 30px; padding-left: 0; padding-right: 0; }
+  #hval { min-width: 74px; text-align: center; }
   #log { position: fixed; top: 64px; right: 18px; width: 270px; max-height: 70vh; overflow: auto; padding: 14px 16px; border-radius: 14px;
     background: rgba(20,16,12,.72); border: 1px solid rgba(255,255,255,.3); backdrop-filter: blur(8px); font-size: 13px; color: #fff; }
   #log h3 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
@@ -58,10 +61,11 @@
   <input id="pwr" type="range" min="0" max="600" step="5" value="220" aria-label="Power in watts">
   <span>↑ ↓ keys</span>
   <button id="skip" title="Jump 250 m up the road (→ key; ← goes back)">Skip 250 m ›</button>
-  <button id="voice" title="Say: rain, mist, overcast, sunny, skip, back, hide or show">Voice: off</button>
+  <button id="voice" title="Say: rain, mist, overcast, sunny, skip, back, hide or show. For a smart trainer: easier or gear down, harder or gear up, flat, full">Voice: off</button>
   <button id="course" title="Switch between the invented valley and the real Leckhampton Hill loop">Course</button>
-  <span id="wx"><button data-w="golden" class="on">Golden</button><button data-w="overcast">Overcast</button><button data-w="rain">Rain</button><button data-w="mist">Mist</button><button data-w="starry">Starry</button></span>
+  <span id="wx"><button data-w="snow">Snow</button><button data-w="golden" class="on">Golden</button><button data-w="overcast">Overcast</button><button data-w="rain">Rain</button><button data-w="mist">Mist</button><button data-w="starry">Starry</button></span>
   <button id="bt">Connect trainer</button>
+  <span id="hills" title="How much of each hill a smart trainer makes you feel. Turn it down if the climbs are too hard; 0 % is flat."><button id="hless" aria-label="Make hills easier">−</button><span id="hval">Hills 50 %</span><button id="hmore" aria-label="Make hills harder">+</button></span>
   <button id="clean" title="Hide everything on screen (H key, or say “hide”). Press H, click, or say “show” to bring it back">Hide info</button>
   <button id="logbtn" title="Distance you have ridden, kept in this browser">Log</button>
 </div>
@@ -140,14 +144,16 @@ const camera = new THREE.PerspectiveCamera(64, innerWidth / innerHeight, 0.05, 9
 scene.add(camera);
 
 /* ---------- sky, sun, haze ---------- */
-const SUN_ELEV = 11, SUN_AZ = -24;
+// ?theme=christmas: the same valley under snow at dusk, with lights in the trees and a few chalets
+const XMAS = new URLSearchParams(location.search).get('theme') === 'christmas' && new URLSearchParams(location.search).get('course') !== 'leckhampton';
+const SUN_ELEV = XMAS ? 4.5 : 11, SUN_AZ = -24;
 const sunDir = new V3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - SUN_ELEV), THREE.MathUtils.degToRad(SUN_AZ));
 const sunFlat = new V3(sunDir.x, 0, sunDir.z).normalize();
 
 const sky = new Sky();
 sky.scale.setScalar(450000);
-Object.assign(sky.material.uniforms.turbidity, { value: 7 });
-Object.assign(sky.material.uniforms.rayleigh, { value: 2.2 });
+Object.assign(sky.material.uniforms.turbidity, { value: XMAS ? 5 : 7 });
+Object.assign(sky.material.uniforms.rayleigh, { value: XMAS ? 3.2 : 2.2 });
 Object.assign(sky.material.uniforms.mieCoefficient, { value: 0.004 });
 Object.assign(sky.material.uniforms.mieDirectionalG, { value: 0.82 });
 sky.material.uniforms.sunPosition.value.copy(sunDir);
@@ -184,11 +190,14 @@ Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -11
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
-const hemi = new THREE.HemisphereLight(0xa9b8ee, 0x6b563a, 2.2);
+const hemi = new THREE.HemisphereLight(XMAS ? 0xa6b4ea : 0xa9b8ee, XMAS ? 0x9aa2b6 : 0x6b563a, 2.2);
 scene.add(hemi);
 
 /* ---------- course: the invented valley, or a real road built from survey data ---------- */
 const COURSE = new URLSearchParams(location.search).get('course') === 'leckhampton' ? 'leckhampton' : 'valley';
+// Scenery mode (?scenery): the ride drifts along on its own at a gentle pace with nothing on screen and the weather
+// slowly changing, for leaving on in the background. ?scenery=nobars also hides the handlebars.
+const SCENERY = new URLSearchParams(location.search).get('scenery');
 let real = null;
 if (COURSE !== 'valley') {
   $('loading').textContent = 'Building Leckhampton Hill…';
@@ -313,8 +322,9 @@ tGeo.computeVertexNormals();
   const gA = new THREE.Color(0.8, 0.95, 0.7), gB = new THREE.Color(1.3, 1.15, 0.75), white = new THREE.Color(1, 1, 1), tMix = new Float32Array(TW * TW * 2);
   for (let k = 0; k < TW * TW; k++) {
     const x = tPos[k * 3], h = tPos[k * 3 + 1], z = tPos[k * 3 + 2], ny = nrm[k * 3 + 1];
-    const rk = smooth(0.86, 0.66, ny), sn = smooth(330, 430, h) * smooth(0.5, 0.75, ny);
+    const rk = smooth(0.86, 0.66, ny), sn = XMAS ? smooth(0.42, 0.72, ny) * 1.25 : smooth(330, 430, h) * smooth(0.5, 0.75, ny);
     col.copy(gA).lerp(gB, smooth(0.3, 0.7, fbm(x / 45, z / 45, 3))).lerp(white, rk);   // tint the grass, leave rock alone
+    if (XMAS) { const d = 0.9 + 0.2 * fbm(x / 30, z / 30, 3); col.setRGB(d, d, d * 1.04); }          // drifts: faint light and shade across the snow
     tCol.set([col.r, col.g, col.b], k * 3); tMix.set([rk, sn], k * 2);
   }
   tGeo.setAttribute('color', new THREE.BufferAttribute(tCol, 3));
@@ -362,7 +372,7 @@ terrainMat.onBeforeCompile = s => {      // grass on the flats, rock on the stee
     vec3 rc = mix(r1, r2, 0.4) * (0.35 + l2 * 1.2 + l3 * 1.6);                          // light and dark bands across whole rock faces
     float rockAmt = smoothstep(0.3, 0.7, vMix.x + (l2 - 0.3) * 0.9);                     // ragged edges where grass gives way to rock
     float snowAmt = smoothstep(0.35, 0.65, vMix.y + (l3 - 0.3) * 0.8);
-    diffuseColor.rgb *= mix(mix(gc, rc, rockAmt), vec3(0.92), snowAmt) * mix(1., vShade, uSunAmt);`);
+    diffuseColor.rgb *= mix(mix(gc, rc, rockAmt), ${XMAS ? 'vec3(0.66, 0.70, 0.78)' : 'vec3(0.92)'}, snowAmt) * mix(1., vShade, uSunAmt);`);
 };
 const terrain = new THREE.Mesh(tGeo, terrainMat);
 terrain.receiveShadow = true; terrain.castShadow = true;
@@ -411,6 +421,17 @@ function asphaltTex() {
   for (let i = 0; i < 6000; i++) {                     // worn paint
     const s = 1 + rnd() * 3;
     g.fillStyle = 'rgba(72,72,76,0.7)'; g.fillRect([36, 972, 505][i % 3] + rnd() * 16, rnd() * Hh, s, s * (1 + rnd() * 3));
+  }
+  if (XMAS) {                                          // snow ploughed to the edges, slush between the wheel tracks
+    for (const [x0, x1] of [[0, 150], [W, W - 150]]) {
+      const gr = g.createLinearGradient(x0, 0, x1, 0);
+      gr.addColorStop(0, 'rgba(226,232,242,1)'); gr.addColorStop(0.45, 'rgba(214,222,234,0.85)'); gr.addColorStop(1, 'rgba(214,222,234,0)');
+      g.fillStyle = gr; g.fillRect(Math.min(x0, x1), 0, 150, Hh);
+    }
+    for (let i = 0; i < 2600; i++) {
+      const edge = rnd() < 0.7, x = edge ? (rnd() < 0.5 ? rnd() * 190 : W - rnd() * 190) : 440 + rnd() * 150, r = 3 + rnd() * (edge ? 16 : 9);
+      g.fillStyle = `rgba(222,229,240,${edge ? 0.5 : 0.22})`; g.beginPath(); g.ellipse(x, rnd() * Hh, r, r * (1.5 + rnd() * 2.5), 0, 0, 6.283); g.fill();
+    }
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = MAX_ANISO;
@@ -461,6 +482,10 @@ function shoulderTex() {
   const gr = g.createLinearGradient(0, 0, 512, 0);       // gravel at the road edge, overgrown further out
   gr.addColorStop(0, 'rgba(40,38,28,0.35)'); gr.addColorStop(0.3, 'rgba(46,58,24,0.8)'); gr.addColorStop(1, 'rgba(44,62,22,1)');
   g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
+  if (XMAS) {                                          // a snowbank
+    g.fillStyle = '#b4bccb'; g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 1500; i++) { const l = 168 + rnd() * 40 | 0; g.fillStyle = `rgba(${l},${l + 5},${l + 16},0.5)`; g.fillRect(rnd() * 512, rnd() * 512, 2 + rnd() * 10, 2 + rnd() * 6); }
+  }
   const t = new THREE.CanvasTexture(c);
   t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = MAX_ANISO;
   return t;
@@ -519,7 +544,7 @@ const chunks = [];
     mesh.frustumCulled = false; mesh.receiveShadow = true; scene.add(mesh);
     return mesh;
   };
-  for (let c0 = 0; c0 + PER <= N; c0 += PER) chunks.push({ c: P[c0 + PER / 2], mesh: null, build: () => build(c0) });
+  if (!XMAS) for (let c0 = 0; c0 + PER <= N; c0 += PER) chunks.push({ c: P[c0 + PER / 2], mesh: null, build: () => build(c0) });
 }
 
 /* ---------- 19th-century touches (real courses): sheep on the hill, hay stooks in the vale ---------- */
@@ -644,7 +669,102 @@ if (real) {
       vec3 transformed = vec3(wxz.x, fl.x - 0.03, wxz.y) + loc * keep;`);
   };
   const meadow = new THREE.Mesh(geo, mat);
-  meadow.frustumCulled = false; meadow.receiveShadow = true; scene.add(meadow);
+  meadow.frustumCulled = false; meadow.receiveShadow = true; meadow.visible = !XMAS; scene.add(meadow);
+}
+
+/* ---------- Christmas: chalets with lit windows, snow on the roof and smoke from the chimney ---------- */
+const chalets = [], xl = { p: [], c: [] }, XL_COLS = [[1, 0.62, 0.25], [1, 0.12, 0.08], [0.15, 0.9, 0.25], [0.2, 0.4, 1], [1, 0.75, 0.1]];
+if (XMAS) {
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new V3(0, 1, 0), sc = new V3(), ps = new V3();
+  const [wc, wg] = canvas2d(256, 128), [ec, eg] = canvas2d(256, 128);
+  wg.fillStyle = '#3d2a1c'; wg.fillRect(0, 0, 256, 128);
+  for (let y = 0; y < 128; y += 9) { wg.fillStyle = `rgba(${20 + rnd() * 30 | 0},${12 + rnd() * 16 | 0},8,0.55)`; wg.fillRect(0, y, 256, 1.5); wg.fillStyle = `rgba(110,78,48,${rnd() * 0.25})`; wg.fillRect(0, y + 2, 256, 6); }
+  wg.fillStyle = '#8d8a84'; wg.fillRect(0, 100, 256, 28);                       // stone footing
+  for (let i = 0; i < 260; i++) { const l = 110 + rnd() * 60 | 0; wg.fillStyle = `rgba(${l},${l},${l + 4},0.6)`; wg.fillRect(rnd() * 256, 100 + rnd() * 28, 5 + rnd() * 9, 3 + rnd() * 5); }
+  eg.fillStyle = '#000'; eg.fillRect(0, 0, 256, 128);
+  for (const x of [44, 128, 212]) {
+    wg.fillStyle = '#e9e2d0'; wg.fillRect(x - 21, 34, 42, 46); wg.fillStyle = '#f6c877'; wg.fillRect(x - 17, 38, 34, 38);
+    wg.fillStyle = '#e9e2d0'; wg.fillRect(x - 1, 38, 2, 38); wg.fillRect(x - 17, 56, 34, 2);
+    wg.fillStyle = '#dfe6f2'; wg.fillRect(x - 24, 80, 48, 5);                   // snow on the sill
+    const gr = eg.createRadialGradient(x, 60, 2, x, 57, 30); gr.addColorStop(0, '#ffd28a'); gr.addColorStop(1, '#c9781e');
+    eg.fillStyle = gr; eg.fillRect(x - 17, 38, 34, 38); eg.fillStyle = '#000'; eg.fillRect(x - 1, 38, 2, 38); eg.fillRect(x - 17, 56, 34, 2);
+  }
+  const tex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = MAX_ANISO; return t; };
+  const wallMat = new THREE.MeshStandardMaterial({ map: tex(wc), emissiveMap: tex(ec), emissive: 0xffffff, emissiveIntensity: 7, roughness: 0.95 });
+  const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  // a gable roof with deep eaves: two snowy slopes, and the timber gable ends under them
+  const rp = [], rc = [], snowC = [0.74, 0.78, 0.86], wood = [0.2, 0.13, 0.08], tri = (a, b, c, col) => { rp.push(...a, ...b, ...c); rc.push(...col, ...col, ...col); };
+  const E = 0.62, O = 0.58, RY = 1;                   // eave reach, gable overhang, ridge height (all scaled per chalet)
+  for (const sgn of [-1, 1]) {
+    const e1 = [-O, 0, sgn * E], e2 = [O, 0, sgn * E], r1 = [-O, RY, 0], r2 = [O, RY, 0];
+    sgn < 0 ? (tri(e1, r1, r2, snowC), tri(e1, r2, e2, snowC)) : (tri(e1, r2, r1, snowC), tri(e1, e2, r2, snowC));
+    const gx = sgn * 0.5; tri([gx, 0, -0.5], [gx, 0, 0.5], [gx, 0.8, 0], wood); tri([gx, 0, 0.5], [gx, 0, -0.5], [gx, 0.8, 0], wood);
+  }
+  const roofGeo = new THREE.BufferGeometry();
+  roofGeo.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); roofGeo.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3));
+  roofGeo.computeVertexNormals();
+  const WANT = 14, walls = new THREE.InstancedMesh(box, wallMat, WANT), roofs = new THREE.InstancedMesh(roofGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), WANT);
+  const stacks = new THREE.InstancedMesh(box, new THREE.MeshStandardMaterial({ color: 0x77726b, roughness: 1 }), WANT), smokeAt = [];
+  let n = 0;
+  for (let k = 0; k < WANT * 6 && n < WANT; k++) {
+    const i = Math.floor(((k + 0.2 + rnd() * 0.6) / (WANT * 6)) * N) % N, side = rnd() < 0.5 ? -1 : 1, d = 21 + rnd() * 17;
+    const x = P[i].x + R[i].x * side * d, z = P[i].z + R[i].z * side * d, y = meshH(x, z);
+    if (Math.abs(y - P[i].y) > 8 || chalets.some(c => (c[0] - x) ** 2 + (c[1] - z) ** 2 < 140 * 140)) continue;
+    const slope = Math.hypot(meshH(x + 5, z) - meshH(x - 5, z), meshH(x, z + 5) - meshH(x, z - 5)) / 10;
+    if (slope > 0.4) continue;
+    const w = 9 + rnd() * 4, dp = 6.5 + rnd() * 2, h = 3.9 + rnd() * 0.8, a = Math.atan2(-T[i].z, T[i].x), lo = y - slope * 6 - 0.3;
+    q.setFromAxisAngle(up, a);
+    walls.setMatrixAt(n, m4.compose(ps.set(x, lo, z), q, sc.set(w, h + (y - lo), dp)));
+    const top = y + h, rh = dp * 0.36;
+    roofs.setMatrixAt(n, m4.compose(ps.set(x, top, z), q, sc.set(w, rh, dp)));
+    const ca = Math.cos(a), sa = Math.sin(a), cx = x + ca * w * 0.25, cz = z - sa * w * 0.25;
+    stacks.setMatrixAt(n, m4.compose(ps.set(cx, top + rh * 0.45, cz), q, sc.set(0.8, rh * 0.9 + 0.5, 0.8)));
+    smokeAt.push([cx, top + rh * 1.35 + 0.5, cz]);
+    for (const sgn of [-1, 1]) for (let t = 0; t <= 1.001; t += 1 / 26) {       // a string of warm lights under each eave
+      const lx = (t - 0.5) * w * 1.14, lz = sgn * dp * 0.6;
+      xl.p.push(x + ca * lx + sa * lz, top + 0.02 - 0.12 * Math.sin(t * Math.PI * 6) ** 2, z - sa * lx + ca * lz); xl.c.push(...XL_COLS[0]);
+    }
+    chalets.push([x, z]); n++;
+  }
+  walls.count = roofs.count = stacks.count = n;
+  if (false) {   // (off: the strings looked odd) strings of bulbs on poles down both sides of the road: through every hamlet, and on a few stretches between
+    const STEP = 8, posts = [], lit = i => chalets.some(c => (c[0] - P[i].x) ** 2 + (c[1] - P[i].z) ** 2 < 230 * 230) || fbm(i / 150 + 31, 4.2, 2) > 0.5;
+    const top = (i, side) => { const d = 5.1, x = P[i].x + R[i].x * side * d, z = P[i].z + R[i].z * side * d; return [x, P[i].y - 0.35 + 4.3, z]; };
+    for (let i = 0; i + STEP <= N; i += STEP) {
+      if (!lit(i)) continue;
+      const many = fbm(i / 400 + 9, 1.7, 2) > 0.52;
+      for (const side of [-1, 1]) {
+        const a = top(i, side), b = top((i + STEP) % N, side);
+        posts.push(a);
+        for (let k = 0; k < 18; k++) {
+          const t = (k + 0.5) / 18;
+          xl.p.push(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - 0.55 * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t);
+          xl.c.push(...(many ? XL_COLS[1 + (k % 4)] : XL_COLS[0]));
+        }
+      }
+    }
+    const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.07, 4.5, 6).translate(0, -2.25, 0), new THREE.MeshStandardMaterial({ color: 0x2a221c, roughness: 1 }), posts.length);
+    posts.forEach((p, k) => poles.setMatrixAt(k, m4.makeTranslation(p[0], p[1] + 0.05, p[2])));
+    poles.castShadow = true; poles.frustumCulled = false; scene.add(poles); st0.poles = posts.length;
+  }
+  for (const m of [walls, roofs, stacks]) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); }
+  const PUFFS = 26, sp = new Float32Array(n * PUFFS * 3), ph = new Float32Array(n * PUFFS);
+  smokeAt.forEach((p, k) => { for (let i = 0; i < PUFFS; i++) { sp.set(p, (k * PUFFS + i) * 3); ph[k * PUFFS + i] = rnd(); } });
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3)); sg.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+  const smoke = new THREE.Points(sg, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uTime, uPx: { value: innerHeight * Math.min(devicePixelRatio, 2) / (2 * Math.tan(0.6)) }, uCol: { value: new V3(0.5, 0.52, 0.6) } },
+    vertexShader: `uniform float uTime, uPx; attribute float aPh; varying float vA;
+      void main(){
+        float age = fract(uTime * 0.07 + aPh);
+        vec3 p = position + vec3(1.6, 0., 0.9) * age * 9. + vec3(sin(aPh * 40. + age * 5.) * 0.8 * age, age * 9. + age * age * 5., cos(aPh * 31. + age * 4.) * 0.8 * age);
+        vec4 mv = viewMatrix * vec4(p, 1.); gl_Position = projectionMatrix * mv;
+        gl_PointSize = (0.7 + age * 4.5) * uPx / -mv.z;
+        vA = smoothstep(0., 0.1, age) * (1. - age) * 0.35;
+      }`,
+    fragmentShader: 'uniform vec3 uCol; varying float vA; void main(){ float r = length(gl_PointCoord - 0.5); gl_FragColor = vec4(uCol, smoothstep(0.5, 0.1, r) * vA); }'
+  }));
+  smoke.frustumCulled = false; smoke.renderOrder = 3; scene.add(smoke);
+  st0.chalets = n;
 }
 
 /* ---------- pines: a trunk plus whorls of needle cards ---------- */
@@ -660,6 +780,16 @@ if (real) {
       bg.beginPath(); bg.moveTo(x, 128);
       bg.quadraticCurveTo(x + reach * 0.25, 128 + sgn * reach * 0.6, x + reach * 0.5 + rnd() * 8, 128 + sgn * reach); bg.stroke();
     }
+  }
+  if (XMAS) {                                          // snow lying along each bough, heavier on the upper side, green showing at the tips
+    const edge = (x, k) => Math.pow(1 - x / 262, 0.55) * 112 * k;
+    for (const [k, al] of [[0.62, 0.5], [0.46, 0.6], [0.3, 0.8]]) {
+      bg.fillStyle = `rgba(232,238,250,${al})`; bg.beginPath(); bg.moveTo(0, 128);
+      for (let x = 0; x <= 250; x += 5) bg.lineTo(x, 128 - edge(x, k) * (0.85 + rnd() * 0.3));
+      for (let x = 250; x >= 0; x -= 5) bg.lineTo(x, 128 + edge(x, k * 0.6) * (0.8 + rnd() * 0.4));
+      bg.fill();
+    }
+    for (let i = 0; i < 260; i++) { const x = rnd() * 246; bg.fillStyle = 'rgba(236,241,252,0.7)'; bg.beginPath(); bg.ellipse(x, 128 + (rnd() - 0.62) * edge(x, 1.5), 2 + rnd() * 5, 2 + rnd() * 4, 0, 0, 6.283); bg.fill(); }
   }
   const boughMap = new THREE.CanvasTexture(bc); boughMap.colorSpace = THREE.SRGBColorSpace; boughMap.anisotropy = 4;
 
@@ -730,10 +860,11 @@ if (real) {
   for (let n = 0; n < (real ? 320000 : 70000) && spots.length < (real ? 26000 : 7000); n++) {
     const x = (rnd() - 0.5) * TS * 0.78, z = (rnd() - 0.5) * TS * 0.78, nr = nearRoad(x, z), d = nr ? nr.d : 999;
     if (d < 11) continue;
+    if (chalets.some(c => (c[0] - x) ** 2 + (c[1] - z) ** 2 < 170)) continue;
     const forest = fbm(x / 140 + 3, z / 140 + 7, 3);
     if (real) {            // trees where the map says there is woodland, and never on a building
       if (!real.wood(x, z) || built.has(cellKey(x, z))) continue;
-    } else if (!(forest > 0.53 || (d < 55 && rnd() < 0.1))) continue;
+    } else if (!(forest > 0.53 || (d < 55 && rnd() < (XMAS ? 0.42 : 0.1)))) continue;
     const y = meshH(x, z);
     if (!real && y > 240) continue;
     spots.push([x, y, z]);
@@ -745,9 +876,40 @@ if (real) {
     const s = 0.9 + rnd() * 0.9;
     ps.set(x, y - 0.3, z); q.setFromAxisAngle(up, rnd() * 6.283); sc.set(s * (0.85 + rnd() * 0.3), s, s * (0.85 + rnd() * 0.3));
     m4.compose(ps, q, sc); fol.setMatrixAt(i, m4); trunk.setMatrixAt(i, m4);
+    if (XMAS && xl.p.length < 110000 * 3) {            // fairy lights wound round the trees beside the road
+      const nr = nearRoad(x, z);
+      if (nr && nr.d < 70 && (nr.d < 45 || rnd() < 0.6)) {
+        const many = rnd() < 0.4, a0 = rnd() * 6.283, w = s * (sc.x + sc.z) / (2 * s);
+        for (let k = 0; k < 96; k++) {
+          const t = (k + rnd() * 0.6) / 96, rad = (2.9 * Math.pow(1 - t, 0.85) + 0.4) * 0.74 * w, a = a0 + t * 58;
+          xl.p.push(x + Math.cos(a) * rad, y - 0.3 + (2.0 + t * 8.6) * s - 0.25 * rad, z + Math.sin(a) * rad);
+          xl.c.push(...(many ? XL_COLS[rnd() * XL_COLS.length | 0] : XL_COLS[0]));
+        }
+      }
+    }
     fol.setColorAt(i, col.setRGB(0.7 + rnd() * 0.3, 0.75 + rnd() * 0.25, 0.6 + rnd() * 0.3));
   });
   for (const m of [fol, trunk]) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); }
+}
+
+if (xl.p.length) {         // every Christmas light is one glowing point; bright enough to bloom
+  const g = new THREE.BufferGeometry(), n = xl.p.length / 3, ph = new Float32Array(n);
+  for (let i = 0; i < n; i++) ph[i] = rnd();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(xl.p, 3)); g.setAttribute('aCol', new THREE.Float32BufferAttribute(xl.c, 3)); g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+  const lights = new THREE.Points(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime, uPx: { value: innerHeight * Math.min(devicePixelRatio, 2) / (2 * Math.tan(0.6)) } },
+    vertexShader: `uniform float uTime, uPx; attribute vec3 aCol; attribute float aPh; varying vec3 vCol;
+      void main(){
+        vec4 mv = viewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * mv;
+        float d = -mv.z, tw = 0.8 + 0.2 * sin(uTime * (1.2 + aPh * 2.5) + aPh * 40.);
+        float px = 0.62 * uPx / d; gl_PointSize = clamp(px, 3., 30.);
+        vCol = aCol * tw * (1. - smoothstep(450., 1100., d)) * min(1., px / 3.);
+      }`,
+    fragmentShader: 'varying vec3 vCol; void main(){ float r = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vCol * (pow(smoothstep(0.5, 0.0, r), 2.) * 5. + smoothstep(0.2, 0.0, r) * 30.), 1.); }'
+  }));
+  lights.frustumCulled = false; lights.renderOrder = 4; scene.add(lights);
+  st0.lights = n;
 }
 
 /* ---------- buildings, hedges and walls (real courses) ---------- */
@@ -951,6 +1113,28 @@ const rainMesh = (() => {
   return m;
 })();
 
+// Snow: soft flakes drifting down in a box that travels with the rider.
+const uSnow = { value: 0 };
+const snowMesh = (() => {
+  const n = 9000, a = new Float32Array(n * 3);
+  for (let i = 0; i < n * 3; i++) a[i] = rnd() * 40;
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3));
+  const m = new THREE.Points(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uTime, uPx, uSnow, uCol: { value: new V3(1, 1.02, 1.08).multiplyScalar(hazeLum * 2.4) } },
+    vertexShader: `uniform float uTime, uPx; varying float vA;
+      void main(){
+        vec3 p = position + vec3(sin(uTime * 0.6 + position.y * 1.7) * 0.5 + uTime * 0.45, -uTime * 1.5, cos(uTime * 0.5 + position.x * 1.3) * 0.5);
+        p = mod(p - cameraPosition, 40.) - 20. + cameraPosition;
+        vec4 mv = viewMatrix * vec4(p, 1.); gl_Position = projectionMatrix * mv;
+        float d = -mv.z; gl_PointSize = clamp(0.05 * uPx / d, 1.3, 9.);
+        vA = smoothstep(20., 13., d) * smoothstep(0.4, 1.6, d);
+      }`,
+    fragmentShader: 'uniform vec3 uCol; uniform float uSnow; varying float vA; void main(){ float r = length(gl_PointCoord - 0.5); gl_FragColor = vec4(uCol, smoothstep(0.5, 0.15, r) * vA * 0.8 * uSnow); }'
+  }));
+  m.frustumCulled = false; m.renderOrder = 3; m.visible = false; scene.add(m);
+  return m;
+})();
+
 const hz = [hazeCol.r, hazeCol.g, hazeCol.b], grey = (r, g, b) => [r * hazeLum, g * hazeLum, b * hazeLum];
 const warmLit = grey(2.6, 1.75, 1.05), warmDark = grey(0.42, 0.45, 0.58);
 const WEATHER = {
@@ -965,6 +1149,10 @@ const WEATHER = {
   starry:   { sun: 5, sunCol: [1, 0.93, 0.74], hemi: 3.2, fog: 0.0005, fogCol: grey(0.16, 0.26, 0.52), dome: 1, domeH: grey(0.16, 0.26, 0.52), domeZ: grey(0.05, 0.1, 0.4),
               cloud: 0, cLit: warmLit, cDark: warmDark, mote: 5, rays: 0, rain: 0, rough: 0.95, tint: 1, ground: 1, paint: 1, expo: 0.5 }
 };
+// Christmas dusk: the last low sun, a blue sky closing in, light snow falling.
+WEATHER.snow = { sun: 5, sunCol: [1, 0.64, 0.46], hemi: 2.5, fog: 0.0015, fogCol: [hz[0] * 0.8, hz[1] * 0.86, hz[2] * 1.05], dome: 0.4, domeH: hz, domeZ: grey(0.26, 0.33, 0.62),
+                 cloud: 0.8, cLit: grey(1.7, 1.2, 1.05), cDark: grey(0.34, 0.4, 0.62), mote: 0, rays: 0.8, rain: 0, rough: 0.5, tint: 0.62, ground: 1, paint: 0, expo: 0.38, snow: 1 };
+for (const k in WEATHER) WEATHER[k].snow ??= 0;
 const wx = JSON.parse(JSON.stringify(WEATHER.golden));
 let wxTarget = WEATHER.golden;
 function setWeather(name, instant) {
@@ -982,11 +1170,11 @@ function setWeather(name, instant) {
   document.querySelectorAll('#wx button').forEach(b => b.classList.toggle('on', b.dataset.w === name));
 }
 function stepWeather(dt) {
-  const k = Math.min(1, dt * 1.2);
+  const k = Math.min(1, dt * (SCENERY !== null ? 0.07 : 1.2));
   for (const key in wx) {
     const a = wx[key], b = wxTarget[key];
     if (Array.isArray(a)) for (let i = 0; i < a.length; i++) a[i] += (b[i] - a[i]) * k;
-    else wx[key] += (b - a) * (key === 'dome' ? Math.min(1, dt * 4) : k);      // the cloud lid closes fast, so the sun doesn't linger
+    else wx[key] += (b - a) * (key === 'dome' ? Math.min(1, dt * (SCENERY !== null ? 0.25 : 4)) : k);      // the cloud lid closes fast, so the sun doesn't linger
   }
   sun.intensity = wx.sun; sun.color.setRGB(wx.sunCol[0], wx.sunCol[1], wx.sunCol[2], THREE.SRGBColorSpace);
   hemi.intensity = wx.hemi;
@@ -997,6 +1185,7 @@ function stepWeather(dt) {
   uCloudLit.value.fromArray(wx.cLit); uCloudDark.value.fromArray(wx.cDark); uCloudHaze.value.fromArray(wx.fogCol);
   terrainMat.color.setScalar(wx.ground);                                          // wet ground is darker
   rainU.uRain.value = wx.rain; rainMesh.visible = wx.rain > 0.01;
+  uSnow.value = wx.snow; snowMesh.visible = wx.snow > 0.01;
   road.material.roughness = wx.rough; road.material.color.setScalar(wx.tint);     // wet tarmac: darker and glossier
   renderer.toneMappingExposure = wx.expo;
 }
@@ -1004,6 +1193,7 @@ document.querySelectorAll('#wx button').forEach(b => b.addEventListener('click',
 // Starry is still being worked on: it only appears on the local copy, not the hosted site.
 const LAB = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';
 if (!LAB) document.querySelector('#wx [data-w="starry"]')?.remove();
+if (!XMAS) document.querySelector('#wx [data-w="snow"]')?.remove(); else setWeather('snow', true);
 addEventListener('keydown', e => { const n = ['golden', 'overcast', 'rain', 'mist', LAB && 'starry'][+e.key - 1]; if (n) setWeather(n); });
 
 /* ---------- cockpit ---------- */
@@ -1153,8 +1343,31 @@ $('skip').addEventListener('click', () => skip(250));
    Without FTMS, or if the trainer refuses control, it stays power only. */
 const FTMS = 0x1826, FTMS_POINT = 0x2AD9;          // service, and its Fitness Machine Control Point
 const OP_CONTROL = 0x00, OP_SIM = 0x11, OP_REPLY = 0x80, OP_OK = 0x01;
-const bike = { dev: null, point: null, busy: false, sent: 0, at: 0, fails: 0, timer: 0 };
-const btLabel = () => { $('bt').textContent = !bike.dev ? 'Connect trainer' : bike.point ? 'Trainer: power and gradient' : 'Trainer: power only'; };
+const bike = { dev: null, known: null, point: null, busy: false, sent: 0, at: 0, fails: 0, timer: 0, tries: 0 };
+// How much of the road's gradient the trainer is asked to feel. Half by default, like most indoor games,
+// so a 10 % climb pedals like 5 %; descents count half again. ?hills=100 gives the full gradient, ?hills=0 none.
+const HILLS_KEY = 'golden-hour-ride-hills';         // kept in this browser; ?hills= sets it for one visit
+let HILLS = (() => {
+  const q = new URLSearchParams(location.search).get('hills');
+  let n = 50; try { const k = localStorage.getItem(HILLS_KEY); if (k !== null && isFinite(+k)) n = +k; } catch {}
+  if (q !== null && q !== '' && isFinite(+q)) n = +q;
+  return Math.max(0, Math.min(100, n)) / 100;
+})();
+const setHills = pct => {
+  HILLS = Math.max(0, Math.min(100, Math.round(pct / 10) * 10)) / 100;
+  try { localStorage.setItem(HILLS_KEY, String(Math.round(HILLS * 100))); } catch {}
+  $('hval').textContent = HILLS ? 'Hills ' + Math.round(HILLS * 100) + ' %' : 'Hills off';
+  bike.at = 0;                                      // tell the trainer straight away
+};
+const TRAINER_KEY = 'golden-hour-ride-trainer';     // the last trainer used: { id, name }, kept in this browser
+const lastTrainer = () => { try { return JSON.parse(localStorage.getItem(TRAINER_KEY)) || null; } catch { return null; } };
+const btLabel = () => {
+  const last = lastTrainer();
+  $('bt').textContent = bike.dev ? (bike.point ? 'Trainer: power and gradient' : 'Trainer: power only')
+    : bike.known || (last && navigator.bluetooth && navigator.bluetooth.getDevices) ? 'Reconnect trainer' : 'Connect trainer';
+};
+$('hless').addEventListener('click', () => setHills(HILLS * 100 - 10));
+$('hmore').addEventListener('click', () => setHills(HILLS * 100 + 10));
 
 // write one command to the control point and wait for the trainer's reply to it
 const ftmsAsk = (point, bytes) => new Promise((ok, no) => {
@@ -1183,7 +1396,7 @@ function simParams(gradePct) {
 
 // about once a second, or sooner when the gradient has moved by more than 0.5 %
 async function sendGrade() {
-  const now = performance.now(), g = Math.max(-20, Math.min(20, grade)), wait = now - bike.at;
+  const now = performance.now(), g = Math.max(-20, Math.min(20, grade)) * (grade > 0 ? HILLS : HILLS * 0.5), wait = now - bike.at;
   if (!bike.point || bike.busy || wait < 250 || (wait < 1000 && Math.abs(g - bike.sent) <= 0.5)) return;
   bike.busy = true; bike.at = now;
   const point = bike.point;
@@ -1205,24 +1418,74 @@ async function ftmsStart(server) {
   } catch (err) { bike.point = null; }                     // no FTMS, or control not given: power only
 }
 
-$('bt').addEventListener('click', async () => {
-  if (!navigator.bluetooth) { $('bt').textContent = 'Needs Chrome or Edge'; return; }
-  try {
-    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: ['cycling_power'] }], optionalServices: [FTMS] });
-    $('bt').textContent = 'Connecting…';
-    const server = await dev.gatt.connect();
-    const svc = await server.getPrimaryService('cycling_power');
-    const ch = await svc.getCharacteristic('cycling_power_measurement');
-    await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged', e => { st.trainer = true; setTarget(e.target.value.getInt16(2, true)); });
+// give up on a slow Bluetooth step instead of hanging on it
+const within = (p, ms) => new Promise((ok, no) => { const t = setTimeout(() => no(new Error('timed out')), ms); p.then(v => { clearTimeout(t); ok(v); }, e => { clearTimeout(t); no(e); }); });
+const watched = new WeakSet();
+
+// connect to one trainer and start reading its power (and sending gradient, if it allows)
+async function useTrainer(dev) {
+  let server;
+  try { server = await within(dev.gatt.connect(), 8000); }
+  catch (err) { try { dev.gatt.disconnect(); } catch {} throw err; }
+  const svc = await server.getPrimaryService('cycling_power');
+  const ch = await svc.getCharacteristic('cycling_power_measurement');
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged', e => { st.trainer = true; setTarget(e.target.value.getInt16(2, true)); });
+  if (!watched.has(dev)) {
+    watched.add(dev);
     dev.addEventListener('gattserverdisconnected', () => {
       st.trainer = false; clearInterval(bike.timer); bike.dev = bike.point = null; btLabel();
+      rejoin(dev);
     });
-    bike.dev = dev; $('bt').title = dev.name || '';
-    await ftmsStart(server);
-    if (dev.gatt.connected) btLabel();
-  } catch (err) { clearInterval(bike.timer); bike.dev = bike.point = null; btLabel(); }
+  }
+  bike.dev = bike.known = dev; bike.tries = 0; $('bt').title = dev.name || '';
+  try { localStorage.setItem(TRAINER_KEY, JSON.stringify({ id: dev.id, name: dev.name || '' })); } catch {}
+  await ftmsStart(server);
+  if (dev.gatt.connected) btLabel();
+}
+
+// the trainer dropped out (out of range, asleep, a blip): try it again a few times before giving up
+async function rejoin(dev) {
+  while (!bike.dev && bike.known === dev && bike.tries < 6) {
+    bike.tries++; $('bt').textContent = 'Reconnecting…';
+    await new Promise(r => setTimeout(r, 2500));
+    if (bike.dev || bike.known !== dev) return;
+    try { await useTrainer(dev); return; } catch (err) { clearInterval(bike.timer); bike.dev = bike.point = null; }
+  }
+  btLabel();
+}
+
+// trainers this browser already has permission for, the one used last first
+async function knownTrainers() {
+  const list = bike.known ? [bike.known] : [], last = lastTrainer();
+  if (navigator.bluetooth.getDevices) {
+    try { for (const d of await navigator.bluetooth.getDevices()) if (!list.includes(d)) (last && d.id === last.id ? list.unshift(d) : list.push(d)); } catch {}
+  }
+  return list;
+}
+
+$('bt').addEventListener('click', async () => {
+  if (!navigator.bluetooth) { $('bt').textContent = 'Needs Chrome or Edge'; return; }
+  if (bike.busyJoin) return;
+  bike.busyJoin = true; bike.tries = 99;                    // a click takes over from any automatic retry
+  try {
+    if (!bike.dev) {
+      for (const dev of await knownTrainers()) {
+        $('bt').textContent = 'Reconnecting…';
+        try { await useTrainer(dev); return; } catch (err) { clearInterval(bike.timer); bike.dev = bike.point = null; }
+      }
+    }
+    // nothing remembered, or it did not answer: show the browser's list of trainers nearby
+    btLabel();
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: ['cycling_power'] }, { services: [FTMS] }], optionalServices: ['cycling_power', FTMS] });
+    $('bt').textContent = 'Connecting…';
+    if (bike.dev && bike.dev !== dev) { const old = bike.dev; bike.known = dev; try { old.gatt.disconnect(); } catch {} }
+    await useTrainer(dev);
+  } catch (err) { if (!bike.dev) { clearInterval(bike.timer); bike.point = null; } btLabel(); }
+  finally { bike.busyJoin = false; }
 });
+btLabel();
+setHills(HILLS * 100);
 
 /* ---------- ride log: distance ridden, kept in this browser (localStorage) ---------- */
 {
@@ -1262,6 +1525,11 @@ $('bt').addEventListener('click', async () => {
 {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition, btn = $('voice');
   const WORDS = [                      // the first match in what was heard wins
+    [/\b(easier|easy|lighter|less|ease|gear down|shift down|change down|lower gear|down a gear)\b/, () => $('hval').textContent, () => setHills(HILLS * 100 - 20)],
+    [/\b(harder|hard|heavier|more|tougher|gear up|shift up|change up|higher gear|up a gear)\b/, () => $('hval').textContent, () => setHills(HILLS * 100 + 20)],
+    [/\b(flat|no hills|hills off)\b/, () => $('hval').textContent, () => setHills(0)],
+    [/\b(full|real hills|all of it)\b/, () => $('hval').textContent, () => setHills(100)],
+    ...(XMAS ? [[/\b(snow|snowing|snowy|christmas)\b/, 'Snow', () => setWeather('snow')]] : []),
     [/\b(rain|raining|rainy|storm|wet)\b/, 'Rain', () => setWeather('rain')],
     [/\b(mist|misty|fog|foggy)\b/, 'Mist', () => setWeather('mist')],
     [/\b(overcast|cloud|clouds|cloudy|grey|gray)\b/, 'Overcast', () => setWeather('overcast')],
@@ -1280,7 +1548,7 @@ $('bt').addEventListener('click', async () => {
     rec.onresult = e => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const heard = e.results[i][0].transcript.toLowerCase(), hit = WORDS.find(w => w[0].test(heard));
-        if (hit && performance.now() - last > 2500) { last = performance.now(); hit[2](); label('Voice: ' + hit[1]); }
+        if (hit && performance.now() - last > 2500) { last = performance.now(); hit[2](); label('Voice: ' + (typeof hit[1] === 'function' ? hit[1]() : hit[1])); }
       }
     };
     rec.onend = () => { if (on) { try { rec.start(); } catch (err) {} } };          // the browser stops listening after a silence, so start again
@@ -1310,6 +1578,10 @@ addEventListener('pointerdown', startAudio); addEventListener('keydown', startAu
 const MASS = 80, LANE = -1.75, clock = new THREE.Clock();
 const pose = mkPose(), ahead = mkPose(), probe = mkPose(), look = new V3(), sunNdc = new V3(), fwd = new V3();
 let lean = 0, phase = 0, grade = 0, huT = 0, first = true;
+// scenery mode's weather, in order, and how many seconds each one stays
+const SCENE_PLAN = XMAS ? [['snow', 280], ['mist', 100], ['snow', 180], ['golden', 95]] : [['golden', 200], ['mist', 110], ['rain', 130], ['overcast', 70], ['golden', 90]];
+let scene_t = 0, scene_i = 0;
+if (SCENERY !== null) { setClean(true); st.target = st.power = 90; if (SCENERY === 'nobars') rig.visible = false; }
 
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -1318,8 +1590,15 @@ function tick() {
   // power -> speed: gravity, rolling resistance and air drag
   st.power += (st.target - st.power) * Math.min(1, dt * 3);
   at(st.s, pose);
-  const v = st.v, force = st.power / Math.max(v, 2) - MASS * 9.81 * (pose.t.y + 0.004) - 0.5 * 1.2 * 0.32 * v * v;
+  // Descents count half, and above 54 km/h the rider feathers the brakes, so speed does not run away downhill.
+  const v = st.v, slope = pose.t.y > 0 ? pose.t.y : pose.t.y * 0.5, brake = v > 15 ? MASS * 0.5 * (v - 15) : 0;
+  const force = st.power / Math.max(v, 2) - MASS * 9.81 * (slope + 0.004) - 0.5 * 1.2 * 0.32 * v * v - brake;
   st.v = Math.max(0.5, v + force / MASS * dt);
+  if (SCENERY !== null) {
+    st.v = v + (5 - v) * Math.min(1, dt);                 // a steady 18 km/h, whatever the gradient
+    scene_t += dt;
+    if (scene_t >= SCENE_PLAN[scene_i][1]) { scene_t = 0; scene_i = (scene_i + 1) % SCENE_PLAN.length; setWeather(SCENE_PLAN[scene_i][0]); }
+  }
   st.s = (st.s + st.v * dt) % LEN; st.dist += st.v * dt;
   grade += (pose.t.y * 100 - grade) * Math.min(1, dt * 2);
 
