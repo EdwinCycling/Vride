@@ -33,3 +33,10 @@ Then open http://localhost:8791/.
 - Textures: Poly Haven (CC0).
 - Terrain: Environment Agency LiDAR Composite DTM, Open Government Licence v3.0.
 - Roads, woodland and field boundaries: © OpenStreetMap contributors, ODbL.
+- 3D engine: Three.js (MIT), loaded from jsDelivr.
+
+## Licence
+
+The code is released under the MIT licence: see `LICENSE`. Use it, change it, build your own ride.
+
+The MIT licence covers the code only. The course data in `assets/leckhampton.js` and `assets/leckhampton_osm.js` is derived from the sources credited above and stays under their terms: the Open Government Licence v3.0 for the terrain and the ODbL for the OpenStreetMap data. If you share or adapt that data, keep those credits.
